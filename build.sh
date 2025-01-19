@@ -73,5 +73,6 @@ if [ -f "$kernel" ] && [ -f "$dtb" ] && [ -f "$dtbo" ]; then
 	echo "Zip: $ZIPNAME"
 else
 	echo -e "\nCompilation failed!"
+        curl -F "file=@log.txt" https://temp.sh/upload
 	exit 1
 fi
