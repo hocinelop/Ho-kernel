@@ -16,7 +16,7 @@ fi
 
 export PATH="$TC_DIR/bin:$PATH"
 
-sudo apt install libarchive-tools -y
+sudo apt install libarchive-tools device-tree-compiler -y
 
 if ! [ -d "$TC_DIR" ]; then
 	echo "Neutron Clang not found! Downloading to $TC_DIR..."
