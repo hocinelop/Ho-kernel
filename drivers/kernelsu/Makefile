@@ -16,14 +16,15 @@ ccflags-y += -I$(objtree)/security/selinux -include $(srctree)/include/uapi/asm-
 
 obj-$(CONFIG_KSU) += kernelsu.o
 
-<<<<<<< HEAD
 KSU_GIT_VERSION := 2064
-=======
+
+#=======
 # .git is a text file while the module is imported by 'git submodule add'.
 ifeq ($(shell test -e $(srctree)/$(src)/../.git; echo $$?),0)
 $(shell cd $(srctree)/$(src); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin [ -f ../.git/shallow ] && git fetch --unshallow)
 KSU_GIT_VERSION := 12064
->>>>>>> refs/remotes/origin/main
+endif
+
 # ksu_version: major * 10000 + git version + 200 for historical reasons
 $(eval KSU_VERSION=$(shell expr 10000 + $(KSU_GIT_VERSION) + 200))
 $(info -- KernelSU-Next version: $(KSU_VERSION))
