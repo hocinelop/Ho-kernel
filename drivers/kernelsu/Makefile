@@ -16,26 +16,12 @@ ccflags-y += -I$(objtree)/security/selinux -include $(srctree)/include/uapi/asm-
 
 obj-$(CONFIG_KSU) += kernelsu.o
 
-# .git is a text file while the module is imported by 'git submodule add'.
-ifeq ($(shell test -e $(srctree)/$(src)/../.git; echo $$?),0)
-$(shell cd $(srctree)/$(src); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin [ -f ../.git/shallow ] && git fetch --unshallow)
-KSU_GIT_VERSION := $(shell cd $(srctree)/$(src); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin git rev-list --count HEAD)
+KSU_GIT_VERSION := 2064
 # ksu_version: major * 10000 + git version + 200 for historical reasons
 $(eval KSU_VERSION=$(shell expr 10000 + $(KSU_GIT_VERSION) + 200))
 $(info -- KernelSU-Next version: $(KSU_VERSION))
 ccflags-y += -DKSU_VERSION=$(KSU_VERSION)
-else # If there is no .git file, the default version will be passed.
-$(warning "KSU_GIT_VERSION not defined! It is better to make KernelSU-Next a git submodule!")
-ccflags-y += -DKSU_VERSION=16
-endif
 
-ifeq ($(shell grep -q " current_sid(void)" $(srctree)/security/selinux/include/objsec.h; echo $$?),0)
-ccflags-y += -DKSU_COMPAT_HAS_CURRENT_SID
-endif
-
-ifeq ($(shell grep -q "struct selinux_state " $(srctree)/security/selinux/include/security.h; echo $$?),0)
-ccflags-y += -DKSU_COMPAT_HAS_SELINUX_STATE
-endif
 
 ifndef KSU_NEXT_EXPECTED_SIZE
 KSU_NEXT_EXPECTED_SIZE := 0x3e6
@@ -56,46 +42,24 @@ $(info -- KernelSU-Next Manager signature hash: $(KSU_NEXT_EXPECTED_HASH))
 ccflags-y += -DEXPECTED_NEXT_SIZE=$(KSU_NEXT_EXPECTED_SIZE)
 ccflags-y += -DEXPECTED_NEXT_HASH=\"$(KSU_NEXT_EXPECTED_HASH)\"
 
-ccflags-y += -DKSU_COMPAT_GET_CRED_RCU
+ccflags-y += -Wno-implicit-function-declaration -Wno-strict-prototypes -Wno-int-conversion -Wno-gcc-compat
+ccflags-y += -Wno-declaration-after-statement -Wno-unused-function
+
+## For non-gki compatiblity ##
+ifeq ($(shell grep -q " current_sid(void)" $(srctree)/security/selinux/include/objsec.h; echo $$?),0)
+ccflags-y += -DKSU_COMPAT_HAS_CURRENT_SID
+endif
+
+ifeq ($(shell grep -q "struct selinux_state " $(srctree)/security/selinux/include/security.h; echo $$?),0)
+ccflags-y += -DKSU_COMPAT_HAS_SELINUX_STATE
+endif
 
 ccflags-y += -DKSU_UMOUNT
 
-# Determine the appropriate atomic function and apply patch accordingly
-ifeq ($(shell grep -q "atomic_inc_not_zero" $(srctree)/kernel/cred.c; echo $$?),0)
-ATOMIC_INC_FUNC = atomic_inc_not_zero
-else ifeq ($(shell grep -q "atomic_long_inc_not_zero" $(srctree)/kernel/cred.c; echo $$?),0)
-ATOMIC_INC_FUNC = atomic_long_inc_not_zero
-else
-$(info -- KSU_NEXT: Neither atomic_inc_not_zero nor atomic_long_inc_not_zero found in kernel/cred.c)
-endif
-
-# Inform which function is being patched
-$(info -- KSU_NEXT: Using $(ATOMIC_INC_FUNC) in get_cred_rcu patch.)
-
-# Add the get_cred_rcu function to cred.h if not already present
-ifneq ($(shell grep -Eq "^static inline const struct cred \*get_cred_rcu" $(srctree)/include/linux/cred.h; echo $$?),0)
-$(info -- KSU_NEXT: adding function 'static inline const struct cred *get_cred_rcu(const struct cred *cred);' to $(srctree)/include/linux/cred.h)
-GET_CRED_RCU = static inline const struct cred *get_cred_rcu(const struct cred *cred)\n\
-{\n\t\
-        struct cred *nonconst_cred = (struct cred *) cred;\n\t\
-        if (!cred)\n\t\t\
-                return NULL;\n\t\
-        if (!$(ATOMIC_INC_FUNC)(&nonconst_cred->usage))\n\t\t\
-                return NULL;\n\t\
-        validate_creds(cred);\n\t\
-        return cred;\n\
-}\n
-$(shell grep -qF "$(GET_CRED_RCU)" $(srctree)/include/linux/cred.h || sed -i '/^static inline void put_cred/i $(GET_CRED_RCU)' $(srctree)/include/linux/cred.h)
-
-# Modify get_task_cred in cred.c
-$(info -- KSU_NEXT: modifying 'get_task_cred' function in $(srctree)/kernel/cred.c)
-$(shell sed -i "s/!$(ATOMIC_INC_FUNC)(&((struct cred \*)cred)->usage)/!get_cred_rcu(cred)/g" $(srctree)/kernel/cred.c)
-endif
-
 ifneq ($(shell grep -Eq "^static int can_umount" $(srctree)/fs/namespace.c; echo $$?),0)
-$(info -- KSU_NEXT: adding function 'static int can_umount(const struct path *path, int flags);' to $(srctree)/fs/namespace.c)
+$(info -- KSU_SUSFS: adding function 'static int can_umount(const struct path *path, int flags);' to $(srctree)/fs/namespace.c)
 CAN_UMOUNT = static int can_umount(const struct path *path, int flags)\n\
-{\n\t\
+{n\t\
         struct mount *mnt = real_mount(path->mnt);\n\t\
         if (flags & ~(MNT_FORCE | MNT_DETACH | MNT_EXPIRE | UMOUNT_NOFOLLOW))\n\t\t\
                 return -EINVAL;\n\t\
@@ -135,7 +99,15 @@ $(shell sed -i '/^extern void __init mnt_init/a int path_umount(struct path *pat
 $(info -- KSU_NEXT: adding 'int path_umount(struct path *path, int flags);' to $(srctree)/fs/internal.h)
 endif
 
-ccflags-y += -Wno-implicit-function-declaration -Wno-strict-prototypes -Wno-int-conversion -Wno-gcc-compat
-ccflags-y += -Wno-declaration-after-statement -Wno-unused-function
-
+# Keep a new line here!! Because someone may append config
+## For susfs stuff ##
+ifeq ($(shell test -e $(srctree)/fs/susfs.c; echo $$?),0)
+$(eval SUSFS_VERSION=$(shell cat $(srctree)/include/linux/susfs.h | grep -E '^#define SUSFS_VERSION' | cut -d' ' -f3 | sed 's/"//g'))
+$(info )
+$(info -- SUSFS_VERSION: $(SUSFS_VERSION))
+else
+$(info -- You have not integrate susfs in your kernel.)
+$(info -- Read: https://gitlab.com/simonpunk/susfs4ksu)
+endif
+# Keep a new line here!!
 # Keep a new line here!! Because someone may append config

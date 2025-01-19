@@ -49,10 +49,6 @@
 #include "throne_tracker.h"
 #include "kernel_compat.h"
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0) || defined(KSU_COMPAT_GET_CRED_RCU)
-#define KSU_GET_CRED_RCU
-#endif
-
 #ifdef CONFIG_KSU_SUSFS
 bool susfs_is_allow_su(void)
 {
@@ -133,50 +129,16 @@ static void setup_groups(struct root_profile *profile, struct cred *cred)
 	set_groups(cred, group_info);
 }
 
-static void disable_seccomp(void)
-{
-	assert_spin_locked(&current->sighand->siglock);
-	// disable seccomp
-#if defined(CONFIG_GENERIC_ENTRY) &&                                           \
-	LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
-	current_thread_info()->syscall_work &= ~SYSCALL_WORK_SECCOMP;
-#else
-	current_thread_info()->flags &= ~(TIF_SECCOMP | _TIF_SECCOMP);
-#endif
-
-#ifdef CONFIG_SECCOMP
-	current->seccomp.mode = 0;
-	current->seccomp.filter = NULL;
-#else
-#endif
-}
-
 void ksu_escape_to_root(void)
 {
 	struct cred *cred;
 
-#ifdef KSU_GET_CRED_RCU
-	rcu_read_lock();
-
-	do {
-		cred = (struct cred *)__task_cred((current));
-		BUG_ON(!cred);
-	} while (!get_cred_rcu(cred));
-
-	if (cred->euid.val == 0) {
-		pr_warn("Already root, don't escape!\n");
-		rcu_read_unlock();
-		return;
-	}
-#else
 	cred = (struct cred *)__task_cred(current);
 
 	if (cred->euid.val == 0) {
 		pr_warn("Already root, don't escape!\n");
 		return;
 	}
-#endif
-
 	struct root_profile *profile = ksu_get_root_profile(cred->uid.val);
 
 	cred->uid.val = profile->uid;
@@ -212,17 +174,21 @@ void ksu_escape_to_root(void)
 	memset(&cred->cap_ambient, 0,
 			sizeof(cred->cap_ambient));
 
-	setup_groups(profile, cred);
-	
-#ifdef KSU_GET_CRED_RCU
-	rcu_read_unlock();
+	// disable seccomp
+#if defined(CONFIG_GENERIC_ENTRY) &&                                           \
+	LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
+	current_thread_info()->syscall_work &= ~SYSCALL_WORK_SECCOMP;
+#else
+	current_thread_info()->flags &= ~(TIF_SECCOMP | _TIF_SECCOMP);
 #endif
 
-	// Refer to kernel/seccomp.c: seccomp_set_mode_strict
-	// When disabling Seccomp, ensure that current->sighand->siglock is held during the operation.
-	spin_lock_irq(&current->sighand->siglock);
-	disable_seccomp();
-	spin_unlock_irq(&current->sighand->siglock);
+#ifdef CONFIG_SECCOMP
+	current->seccomp.mode = 0;
+	current->seccomp.filter = NULL;
+#else
+#endif
+
+	setup_groups(profile, cred);
 
 	ksu_setup_selinux(profile->selinux_domain);
 }
@@ -897,43 +863,35 @@ out_ksu_try_umount:
 #endif
 	}
 
-#ifndef CONFIG_KSU_SUSFS_SUS_MOUNT
 	// check old process's selinux context, if it is not zygote, ignore it!
 	// because some su apps may setuid to untrusted_app but they are in global mount namespace
 	// when we umount for such process, that is a disaster!
-	bool is_zygote_child = ksu_is_zygote(old->security);
-#endif
+	bool is_zygote_child = is_zygote(old->security);
 	if (!is_zygote_child) {
 		pr_info("handle umount ignore non zygote child: %d\n",
 			current->pid);
 		return 0;
 	}
-
 #ifdef CONFIG_KSU_DEBUG
 	// umount the target mnt
 	pr_info("handle umount for uid: %d, pid: %d\n", new_uid.val,
 		current->pid);
 #endif
 
-#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
-	// susfs come first, and lastly umount by ksu, make sure umount in reversed order
-	susfs_try_umount_all(new_uid.val);
-#else
 	// fixme: use `collect_mounts` and `iterate_mount` to iterate all mountpoint and
 	// filter the mountpoint whose target is `/data/adb`
-	ksu_try_umount("/system", true, 0);
-	ksu_try_umount("/system_ext", true, 0);
-	ksu_try_umount("/vendor", true, 0);
-	ksu_try_umount("/product", true, 0);
-	ksu_try_umount("/data/adb/modules", false, MNT_DETACH);
+	try_umount("/system", true, 0);
+	try_umount("/system_ext", true, 0);
+	try_umount("/vendor", true, 0);
+	try_umount("/product", true, 0);
+	try_umount("/data/adb/modules", false, MNT_DETACH);
 
 	// try umount ksu temp path
-	ksu_try_umount("/debug_ramdisk", false, MNT_DETACH);
-	ksu_try_umount("/sbin", false, MNT_DETACH);
-
+	try_umount("/debug_ramdisk", false, MNT_DETACH);
+	try_umount("/sbin", false, MNT_DETACH);
+	
 	// try umount hosts file
-	ksu_try_umount("/system/etc/hosts", false, MNT_DETACH);
-#endif
+	try_umount("/system/etc/hosts", false, MNT_DETACH);
 
 	return 0;
 }
