@@ -19,7 +19,7 @@ jobs:
       - name: Set swap to 10G
         uses: pierotofy/set-swap-space@master
         with:
-        swap-size-gb: 10
+          swap-size-gb: 10
 
       - name: Run next-susfs build script
         run: |
