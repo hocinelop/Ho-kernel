@@ -9,7 +9,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@4
+        uses: actions/checkout@main
 
       - name: Setup timezone
         uses: szenius/set-timezone@master
@@ -32,12 +32,6 @@ jobs:
         uses: actions/upload-artifact@main
         with:
           name: standard-artifact
-          path: ${{ env.ZIPNAME }}
-
-      - name: Upload KSU artifact
-        uses: actions/upload-artifact@main
-        with:
-          name: KSU-artifact
           path: ${{ env.ZIPNAME }}
 
       - name: Create Telegram caption
