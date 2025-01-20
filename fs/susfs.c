@@ -852,7 +852,7 @@ int susfs_sus_su(struct st_sus_su* __user user_info) {
 			SUSFS_LOGE("please make sure the current sus_su mode is %d first\n", SUS_SU_DISABLED);
 			return 2;
 		}
-		ksu_susfs_enable_sus_su();
+		void ksu_susfs_enable_sus_su(void);
 		susfs_sus_su_working_mode = SUS_SU_WITH_HOOKS;
 		susfs_is_sus_su_hooks_enabled = true;
 		SUSFS_LOGI("core kprobe hooks for ksu are disabled!\n");
@@ -865,7 +865,7 @@ int susfs_sus_su(struct st_sus_su* __user user_info) {
 			return 1;
 		}
 		susfs_is_sus_su_hooks_enabled = false;
-		ksu_susfs_disable_sus_su();
+		void ksu_susfs_disable_sus_su(void);
 		susfs_sus_su_working_mode = SUS_SU_DISABLED;
 		if (last_working_mode == SUS_SU_WITH_HOOKS) {
 			SUSFS_LOGI("core kprobe hooks for ksu are enabled!\n");
