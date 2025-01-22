@@ -537,7 +537,7 @@ if [ $? != 0 -o -z "$(ls bin)" ]; then
   abort "Busybox setup failed. Aborting...";
 fi;
 OLD_PATH="$PATH";
-export PATH="$AKHOME/bin:$AKHOME/tools:$PATH";
+export PATH="$AKHOME/tools:$AKHOME/bin:$PATH";
 
 if [ -f banner ]; then
   ui_printfile banner;
@@ -545,23 +545,7 @@ if [ -f banner ]; then
 fi;
 
 KERNEL_STRING="$(file_getprop anykernel.sh kernel.string)";
-ui_print "=================================================="
-sleep 0.5
-ui_print "=  █╗  ██╗ ██████╗  ██████╗██╗███╗   ██╗███████╗  ="
-sleep 0.5
-ui_print "=  ██║  ██║██╔═══██╗██╔════╝██║████╗  ██║██╔════╝  ="
-sleep 0.5
-ui_print "=  ███████║██║   ██║██║     ██║██╔██╗ ██║█████╗  ="
-sleep 0.5
-ui_print "=  ██╔══██║██║   ██║██║     ██║██║╚██╗██║██╔══╝  ="
-sleep 0.5
-ui_print "=  ██║  ██║╚██████╔╝╚██████╗██║██║ ╚████║███████╗  ="
-sleep 0.5
-ui_print "=  ╚═╝  ╚═╝ ╚═════╝  ╚═════╝╚═╝╚═╝  ╚═══╝╚══════╝  ="        ="
-sleep 0.5
-ui_print "=================================================="
-sleep 0.5
-ui_print " ";
+ui_print "$KERNEL_STRING";
 if [ -f version ]; then
   ui_print " ";
   ui_printfile version;
@@ -600,15 +584,3 @@ fi;
 ui_print " " "Done!";
 export PATH="$OLD_PATH";
 unset OLD_PATH OUTFD ZIPFILE;
-sleep 0.5
-ui_print "=  █╗  ██╗ ██████╗  ██████╗██╗███╗   ██╗███████╗  ="
-sleep 0.5
-ui_print "=  ██║  ██║██╔═══██╗██╔════╝██║████╗  ██║██╔════╝  ="
-sleep 0.5
-ui_print "=  ███████║██║   ██║██║     ██║██╔██╗ ██║█████╗  ="
-sleep 0.5
-ui_print "=  ██╔══██║██║   ██║██║     ██║██║╚██╗██║██╔══╝  ="
-sleep 0.5
-ui_print "=  ██║  ██║╚██████╔╝╚██████╗██║██║ ╚████║███████╗  ="
-sleep 0.5
-ui_print "=  ╚═╝  ╚═╝ ╚═════╝  ╚═════╝╚═╝╚═╝  ╚═══╝╚══════╝  ="
